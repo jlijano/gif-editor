@@ -35,13 +35,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-const uploadFields = upload.fields([
-  { name: 'frame1', maxCount: 1 },
-  { name: 'frame2', maxCount: 1 },
-  { name: 'frame3', maxCount: 1 },
-  { name: 'frame4', maxCount: 1 },
-  { name: 'frame5', maxCount: 1 }
-]);
+const uploadFrames = upload.array('frames', 12);
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -53,17 +47,13 @@ app.get('/', async (req, res) => {
   res.render('index', { error: null, result: null, recent });
 });
 
-app.post('/', uploadFields, async (req, res) => {
+app.post('/', uploadFrames, async (req, res) => {
   const recent = await getRecentOutputs();
 
   try {
-    const files = [];
-    for (let i = 1; i <= 5; i += 1) {
-      const frame = req.files[`frame${i}`]?.[0];
-      if (!frame) {
-        throw new Error(`Please upload image for Frame ${i}.`);
-      }
-      files.push(frame);
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (files.length < 2) {
+      throw new Error('Please upload at least 2 frames to create an animated GIF.');
     }
 
     const result = await handleUploadAndConvert(files, req.body);

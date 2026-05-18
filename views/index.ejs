@@ -36,21 +36,29 @@
         <h2>Upload and Convert</h2>
 
         <form method="post" enctype="multipart/form-data" class="form">
-            <div class="frames-grid">
-                <% for (let i = 1; i <= 5; i += 1) { %>
-                    <label class="field upload-field">
-                        <span>Frame <%= i %></span>
-                        <input type="file" name="frame<%= i %>" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" data-frame-index="<%= i %>" required>
-                        <div class="frame-preview-card" id="framePreview<%= i %>">
-                            <div class="preview-placeholder-small">No image selected</div>
-                        </div>
-                    </label>
-                <% } %>
+            <div class="frames-grid" id="framesContainer">
+                <label class="field upload-field">
+                    <span>Frame 1</span>
+                    <input type="file" name="frames" class="frame-input" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" required>
+                    <div class="frame-preview-card" id="framePreview1">
+                        <div class="preview-placeholder-small">No image selected</div>
+                    </div>
+                </label>
+
+                <label class="field upload-field">
+                    <span>Frame 2</span>
+                    <input type="file" name="frames" class="frame-input" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" required>
+                    <div class="frame-preview-card" id="framePreview2">
+                        <div class="preview-placeholder-small">No image selected</div>
+                    </div>
+                </label>
             </div>
+
+            <button type="button" class="button" id="addFrameButton">+ Add frame</button>
 
             <label class="field drop-zone" id="dropZone">
                 <span>Quick upload</span>
-                <p class="drop-zone-hint">Drag & drop up to 5 images here or paste them from the clipboard.</p>
+                <p class="drop-zone-hint">Drag & drop 2 or more images here or paste them from the clipboard.</p>
             </label>
 
             <section class="preview-section">

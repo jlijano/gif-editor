@@ -1,5 +1,6 @@
 const dropZone = document.getElementById('dropZone');
-const fileInputs = Array.from(document.querySelectorAll('input[type="file"][name^="frame"]'));
+const framesContainer = document.getElementById('framesContainer');
+const addFrameButton = document.getElementById('addFrameButton');
 const hint = document.querySelector('.drop-zone-hint');
 const previewGrid = document.getElementById('previewGrid');
 const suggestedWidthText = document.getElementById('suggestedWidth');
@@ -9,24 +10,69 @@ const maxHeightText = document.getElementById('maxHeight');
 const frameWidthInput = document.querySelector('input[name="frame_width"]');
 const frameHeightInput = document.querySelector('input[name="frame_height"]');
 const frameRateInput = document.querySelector('input[name="frame_rate"]');
+const MAX_FRAMES = 12;
+
+function getFileInputs() {
+    return Array.from(framesContainer.querySelectorAll('input.frame-input'));
+}
+
+function getFrameCount() {
+    return getFileInputs().length;
+}
+
+function updateFrameLabels() {
+    getFileInputs().forEach((input, index) => {
+        const label = input.closest('.upload-field');
+        if (label) {
+            const title = label.querySelector('span');
+            title.textContent = `Frame ${index + 1}`;
+            const preview = label.querySelector('.frame-preview-card');
+            if (preview) {
+                preview.id = `framePreview${index + 1}`;
+            }
+        }
+    });
+}
+
+function createFrameInput() {
+    const wrapper = document.createElement('label');
+    wrapper.className = 'field upload-field';
+    const index = getFrameCount() + 1;
+
+    wrapper.innerHTML = `
+        <span>Frame ${index}</span>
+        <input type="file" name="frames" class="frame-input" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif">
+        <div class="frame-preview-card" id="framePreview${index}">
+            <div class="preview-placeholder-small">No image selected</div>
+        </div>
+    `;
+
+    const input = wrapper.querySelector('input.frame-input');
+    input.addEventListener('change', updateSelectedPreviews);
+    return wrapper;
+}
 
 function updateHint(message) {
     if (!hint) return;
-    hint.textContent = message || 'Drag & drop up to 5 images here or paste them from the clipboard.';
+    hint.textContent = message || `Drag & drop 2 to ${MAX_FRAMES} images here or paste them from the clipboard.`;
 }
 
 function handleFiles(files) {
-    if (!files || !files.length || fileInputs.length === 0) return;
+    if (!files || !files.length || !framesContainer) return;
 
-    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/')).slice(0, 5);
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/')).slice(0, MAX_FRAMES);
     if (imageFiles.length === 0) return;
 
-    const emptyInputs = fileInputs.filter((input) => !input.files.length);
+    while (getFrameCount() < imageFiles.length && getFrameCount() < MAX_FRAMES) {
+        framesContainer.appendChild(createFrameInput());
+    }
+
+    const fileInputs = getFileInputs();
     imageFiles.forEach((file, index) => {
-        const targetInput = emptyInputs[index] || fileInputs[index];
+        const input = fileInputs[index];
         const dt = new DataTransfer();
         dt.items.add(file);
-        targetInput.files = dt.files;
+        input.files = dt.files;
     });
 
     updateHint(`${imageFiles.length} image(s) selected`);
@@ -37,9 +83,9 @@ function updateSelectedPreviews() {
     if (!previewGrid) return;
     previewGrid.innerHTML = '';
 
-    const selectedFiles = fileInputs.map((input) => input.files[0]).filter(Boolean);
-    if (selectedFiles.length === 0) {
-        previewGrid.innerHTML = '<div class="preview-placeholder">Select images to preview removed background here.</div>';
+    const selectedFiles = getFileInputs().map((input) => input.files[0]).filter(Boolean);
+    if (selectedFiles.length < 2) {
+        previewGrid.innerHTML = '<div class="preview-placeholder">Select at least 2 frames to preview and convert.</div>';
         suggestedWidthText.textContent = '32';
         suggestedHeightText.textContent = '32';
         maxWidthText.textContent = '32';
@@ -180,9 +226,17 @@ function isSimilarColor(r, g, b, target, tolerance) {
     );
 }
 
-if (fileInputs.length) {
-    fileInputs.forEach((input) => {
+function initializeFrameInputs() {
+    getFileInputs().forEach((input) => {
         input.addEventListener('change', updateSelectedPreviews);
+    });
+}
+
+if (addFrameButton) {
+    addFrameButton.addEventListener('click', () => {
+        if (getFrameCount() >= MAX_FRAMES) return;
+        framesContainer.appendChild(createFrameInput());
+        updateFrameLabels();
     });
 }
 
@@ -211,4 +265,6 @@ document.addEventListener('paste', (event) => {
     }
 });
 
+initializeFrameInputs();
 updateSelectedPreviews();
+
