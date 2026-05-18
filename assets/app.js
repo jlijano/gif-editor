@@ -5,6 +5,8 @@ const fileInput = document.getElementById('spriteInput');
 const hint = document.querySelector('.drop-zone-hint');
 const previewImage = document.getElementById('uploadPreview');
 const previewPlaceholder = document.querySelector('.preview-placeholder');
+const frameWidthInput = document.querySelector('input[name="frame_width"]');
+const frameHeightInput = document.querySelector('input[name="frame_height"]');
 
 function syncControls() {
     if (!checkbox || !controls) return;
@@ -32,6 +34,15 @@ function clearPreview() {
 
 function handleFiles(files) {
     if (!files || files.length === 0 || !fileInput) return;
+
+    if (frameWidthInput && !frameWidthInput.value) {
+        frameWidthInput.value = '32';
+    }
+
+    if (frameHeightInput && !frameHeightInput.value) {
+        frameHeightInput.value = '32';
+    }
+
     const dt = new DataTransfer();
     dt.items.add(files[0]);
     fileInput.files = dt.files;

@@ -82,7 +82,7 @@ async function handleUploadAndConvert(file, body) {
   const sliceEnabled = body.slice_enabled === '1';
 
   if (!sliceEnabled) {
-    await sharp(inputPath).gif().toFile(outputPath);
+    await sharp(inputPath).gif({ effort: 7, dither: false }).toFile(outputPath);
     return {
       output_url: outputUrl,
       message: 'Created a static GIF from the uploaded image.'
@@ -142,9 +142,9 @@ async function removeBackgroundFromImage(inputPath) {
 
   const { data } = await image.raw().toBuffer({ resolveWithObject: true });
   const bgColor = estimateBackgroundColor(data, metadata.width, metadata.height);
-  const tolerance = 35;
+  const tolerance = 45;
   const pixelCount = metadata.width * metadata.height;
-  const outputBuffer = Buffer.alloc(data.length);
+  const outputBuffer = Buffer.from(data);
 
   for (let i = 0; i < pixelCount; i += 1) {
     const idx = i * 4;
@@ -154,15 +154,7 @@ async function removeBackgroundFromImage(inputPath) {
     const a = data[idx + 3];
 
     if (a > 0 && isSimilarColor(r, g, b, bgColor, tolerance)) {
-      outputBuffer[idx] = r;
-      outputBuffer[idx + 1] = g;
-      outputBuffer[idx + 2] = b;
       outputBuffer[idx + 3] = 0;
-    } else {
-      outputBuffer[idx] = r;
-      outputBuffer[idx + 1] = g;
-      outputBuffer[idx + 2] = b;
-      outputBuffer[idx + 3] = a;
     }
   }
 
@@ -176,33 +168,60 @@ async function removeBackgroundFromImage(inputPath) {
 }
 
 function estimateBackgroundColor(data, width, height) {
-  const samples = [];
-  const corners = [
-    { x: 0, y: 0 },
-    { x: width - 1, y: 0 },
-    { x: 0, y: height - 1 },
-    { x: width - 1, y: height - 1 }
-  ];
+  const samples = sampleBorderPixels(data, width, height, 6);
+  if (samples.length === 0) {
+    return { r: 255, g: 255, b: 255 };
+  }
 
-  corners.forEach((point) => {
-    const idx = (point.y * width + point.x) * 4;
-    samples.push({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
-  });
+  const bucket = new Map();
+  for (const sample of samples) {
+    const key = `${Math.round(sample.r / 16)},${Math.round(sample.g / 16)},${Math.round(sample.b / 16)}`;
+    const existing = bucket.get(key) || { count: 0, r: 0, g: 0, b: 0 };
+    bucket.set(key, {
+      count: existing.count + 1,
+      r: existing.r + sample.r,
+      g: existing.g + sample.g,
+      b: existing.b + sample.b
+    });
+  }
 
-  const average = samples.reduce(
-    (acc, current) => ({
-      r: acc.r + current.r,
-      g: acc.g + current.g,
-      b: acc.b + current.b
-    }),
-    { r: 0, g: 0, b: 0 }
-  );
+  let best = null;
+  for (const value of bucket.values()) {
+    if (!best || value.count > best.count) {
+      best = value;
+    }
+  }
 
   return {
-    r: Math.round(average.r / samples.length),
-    g: Math.round(average.g / samples.length),
-    b: Math.round(average.b / samples.length)
+    r: Math.round(best.r / best.count),
+    g: Math.round(best.g / best.count),
+    b: Math.round(best.b / best.count)
   };
+}
+
+function sampleBorderPixels(data, width, height, step = 6) {
+  const samples = [];
+
+  function addPixel(x, y) {
+    const idx = (y * width + x) * 4;
+    samples.push({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
+  }
+
+  for (let x = 0; x < width; x += step) {
+    addPixel(x, 0);
+    addPixel(x, height - 1);
+  }
+
+  for (let y = 0; y < height; y += step) {
+    addPixel(0, y);
+    addPixel(width - 1, y);
+  }
+
+  addPixel(width - 1, 0);
+  addPixel(0, height - 1);
+  addPixel(width - 1, height - 1);
+
+  return samples;
 }
 
 function isSimilarColor(r, g, b, target, tolerance) {
