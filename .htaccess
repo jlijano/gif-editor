@@ -1,0 +1,6 @@
+# Optional Apache protections for local XAMPP use.
+Options -Indexes
+
+<FilesMatch "\.(php)$">
+    Require all granted
+</FilesMatch>
