@@ -1,89 +1,102 @@
-const checkbox = document.getElementById('sliceEnabled');
-const controls = document.getElementById('sliceControls');
 const dropZone = document.getElementById('dropZone');
-const fileInput = document.getElementById('spriteInput');
+const fileInputs = Array.from(document.querySelectorAll('input[type="file"][name^="frame"]'));
 const hint = document.querySelector('.drop-zone-hint');
-const previewImage = document.getElementById('uploadPreview');
-const previewPlaceholder = document.querySelector('.preview-placeholder');
+const previewGrid = document.getElementById('previewGrid');
+const suggestedWidthText = document.getElementById('suggestedWidth');
+const suggestedHeightText = document.getElementById('suggestedHeight');
+const maxWidthText = document.getElementById('maxWidth');
+const maxHeightText = document.getElementById('maxHeight');
 const frameWidthInput = document.querySelector('input[name="frame_width"]');
 const frameHeightInput = document.querySelector('input[name="frame_height"]');
-
-function syncControls() {
-    if (!checkbox || !controls) return;
-    controls.classList.toggle('is-hidden', !checkbox.checked);
-}
+const frameRateInput = document.querySelector('input[name="frame_rate"]');
 
 function updateHint(message) {
     if (!hint) return;
-    hint.textContent = message || 'Upload, drag & drop, or paste an image here.';
-}
-
-function setPreview(imageUrl) {
-    if (!previewImage || !previewPlaceholder) return;
-    previewImage.src = imageUrl;
-    previewImage.hidden = false;
-    previewPlaceholder.style.display = 'none';
-}
-
-function clearPreview() {
-    if (!previewImage || !previewPlaceholder) return;
-    previewImage.src = '';
-    previewImage.hidden = true;
-    previewPlaceholder.style.display = 'block';
+    hint.textContent = message || 'Drag & drop up to 5 images here or paste them from the clipboard.';
 }
 
 function handleFiles(files) {
-    if (!files || files.length === 0 || !fileInput) return;
+    if (!files || !files.length || fileInputs.length === 0) return;
 
-    if (frameWidthInput && !frameWidthInput.value) {
-        frameWidthInput.value = '32';
-    }
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/')).slice(0, 5);
+    if (imageFiles.length === 0) return;
 
-    if (frameHeightInput && !frameHeightInput.value) {
-        frameHeightInput.value = '32';
-    }
+    const emptyInputs = fileInputs.filter((input) => !input.files.length);
+    imageFiles.forEach((file, index) => {
+        const targetInput = emptyInputs[index] || fileInputs[index];
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        targetInput.files = dt.files;
+    });
 
-    const dt = new DataTransfer();
-    dt.items.add(files[0]);
-    fileInput.files = dt.files;
-    updateHint(files[0].name);
-    loadPreview(files[0]);
+    updateHint(`${imageFiles.length} image(s) selected`);
+    updateSelectedPreviews();
 }
 
-function loadPreview(file) {
-    if (!file || !file.type.startsWith('image/')) {
-        clearPreview();
+function updateSelectedPreviews() {
+    if (!previewGrid) return;
+    previewGrid.innerHTML = '';
+
+    const selectedFiles = fileInputs.map((input) => input.files[0]).filter(Boolean);
+    if (selectedFiles.length === 0) {
+        previewGrid.innerHTML = '<div class="preview-placeholder">Select images to preview removed background here.</div>';
+        suggestedWidthText.textContent = '32';
+        suggestedHeightText.textContent = '32';
+        maxWidthText.textContent = '32';
+        maxHeightText.textContent = '32';
         return;
     }
 
-    const url = URL.createObjectURL(file);
-    const img = new Image();
+    const dimensionPromises = selectedFiles.map((file, index) => {
+        return loadImage(file).then((img) => {
+            const card = createPreviewCard(img, index + 1, file.name);
+            previewGrid.appendChild(card);
+            return { width: img.naturalWidth, height: img.naturalHeight };
+        }).catch(() => {
+            const card = document.createElement('div');
+            card.className = 'frame-card';
+            card.innerHTML = '<div class="preview-placeholder-small">Unable to preview</div>';
+            previewGrid.appendChild(card);
+            return null;
+        });
+    });
 
-    img.onload = () => {
-        URL.revokeObjectURL(url);
-        renderPreview(img);
-    };
-
-    img.onerror = () => {
-        URL.revokeObjectURL(url);
-        clearPreview();
-    };
-
-    img.src = url;
+    Promise.all(dimensionPromises).then((results) => {
+        const sizes = results.filter(Boolean);
+        if (sizes.length > 0) {
+            updateSuggestedSizes(sizes);
+        }
+    });
 }
 
-function renderPreview(img) {
-    const canvas = document.createElement('canvas');
-    const width = img.naturalWidth;
-    const height = img.naturalHeight;
-    canvas.width = width;
-    canvas.height = height;
+function loadImage(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
 
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            resolve(img);
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Image load error'));
+        };
+
+        img.src = url;
+    });
+}
+
+function createPreviewCard(img, index, name) {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, width, height);
-    const imageData = ctx.getImageData(0, 0, width, height);
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const bgColor = estimateBackgroundColor(imageData);
-    const tolerance = 35;
+    const tolerance = 45;
 
     for (let i = 0; i < imageData.data.length; i += 4) {
         const r = imageData.data[i];
@@ -97,33 +110,50 @@ function renderPreview(img) {
     }
 
     ctx.putImageData(imageData, 0, 0);
-    setPreview(canvas.toDataURL('image/png'));
+
+    const card = document.createElement('div');
+    card.className = 'frame-card';
+    card.innerHTML = `
+        <div class="frame-card-label">Frame ${index}</div>
+        <img src="${canvas.toDataURL('image/png')}" alt="Frame ${index} preview">
+        <div class="frame-card-meta">${name} (${img.naturalWidth}×${img.naturalHeight})</div>
+    `;
+    return card;
+}
+
+function updateSuggestedSizes(sizes) {
+    const maxWidth = Math.max(...sizes.map((item) => item.width));
+    const maxHeight = Math.max(...sizes.map((item) => item.height));
+
+    if (suggestedWidthText) suggestedWidthText.textContent = `${maxWidth}`;
+    if (suggestedHeightText) suggestedHeightText.textContent = `${maxHeight}`;
+    if (maxWidthText) maxWidthText.textContent = `${maxWidth}`;
+    if (maxHeightText) maxHeightText.textContent = `${maxHeight}`;
+    if (frameWidthInput && !frameWidthInput.value) frameWidthInput.value = `${maxWidth}`;
+    if (frameHeightInput && !frameHeightInput.value) frameHeightInput.value = `${maxHeight}`;
+    if (frameRateInput && !frameRateInput.value) frameRateInput.value = '24';
 }
 
 function estimateBackgroundColor(imageData) {
     const width = imageData.width;
     const height = imageData.height;
     const samples = [];
-    const corners = [
-        { x: 0, y: 0 },
-        { x: width - 1, y: 0 },
-        { x: 0, y: height - 1 },
-        { x: width - 1, y: height - 1 }
-    ];
+    const step = Math.max(1, Math.floor(Math.min(width, height) / 8));
 
-    for (const corner of corners) {
-        const idx = (corner.y * width + corner.x) * 4;
-        samples.push({
-            r: imageData.data[idx],
-            g: imageData.data[idx + 1],
-            b: imageData.data[idx + 2]
-        });
+    for (let x = 0; x < width; x += step) {
+        samples.push(getPixel(imageData, x, 0));
+        samples.push(getPixel(imageData, x, height - 1));
     }
 
-    const average = samples.reduce((acc, item) => ({
-        r: acc.r + item.r,
-        g: acc.g + item.g,
-        b: acc.b + item.b
+    for (let y = 0; y < height; y += step) {
+        samples.push(getPixel(imageData, 0, y));
+        samples.push(getPixel(imageData, width - 1, y));
+    }
+
+    const average = samples.reduce((acc, pixel) => ({
+        r: acc.r + pixel.r,
+        g: acc.g + pixel.g,
+        b: acc.b + pixel.b
     }), { r: 0, g: 0, b: 0 });
 
     return {
@@ -133,12 +163,27 @@ function estimateBackgroundColor(imageData) {
     };
 }
 
+function getPixel(imageData, x, y) {
+    const idx = (y * imageData.width + x) * 4;
+    return {
+        r: imageData.data[idx],
+        g: imageData.data[idx + 1],
+        b: imageData.data[idx + 2]
+    };
+}
+
 function isSimilarColor(r, g, b, target, tolerance) {
     return (
         Math.abs(r - target.r) <= tolerance &&
         Math.abs(g - target.g) <= tolerance &&
         Math.abs(b - target.b) <= tolerance
     );
+}
+
+if (fileInputs.length) {
+    fileInputs.forEach((input) => {
+        input.addEventListener('change', updateSelectedPreviews);
+    });
 }
 
 if (dropZone) {
@@ -158,23 +203,12 @@ if (dropZone) {
     });
 }
 
-if (document) {
-    document.addEventListener('paste', (event) => {
-        const files = event.clipboardData && event.clipboardData.files;
-        if (files && files.length > 0) {
-            handleFiles(files);
-            event.preventDefault();
-        }
-    });
-}
+document.addEventListener('paste', (event) => {
+    const files = event.clipboardData && event.clipboardData.files;
+    if (files && files.length > 0) {
+        handleFiles(files);
+        event.preventDefault();
+    }
+});
 
-if (fileInput) {
-    fileInput.addEventListener('change', (event) => {
-        handleFiles(event.target.files);
-    });
-}
-
-if (checkbox) {
-    checkbox.addEventListener('change', syncControls);
-    syncControls();
-}
+updateSelectedPreviews();
