@@ -73,6 +73,8 @@ async function handleUploadAndConvert(file, body) {
   }
 
   const inputPath = file.path;
+  await removeBackgroundFromImage(inputPath);
+
   const outputFilename = `${Date.now()}-${Math.random().toString(16).slice(2)}.gif`;
   const outputPath = path.join(outputsDir, outputFilename);
   const outputUrl = `/outputs/${outputFilename}`;
@@ -128,6 +130,87 @@ function readSliceSettings(body) {
     direction: body.direction === 'vertical' ? 'vertical' : 'horizontal',
     loop: body.loop === '1' ? 1 : 0
   };
+}
+
+async function removeBackgroundFromImage(inputPath) {
+  const image = sharp(inputPath).ensureAlpha();
+  const metadata = await image.metadata();
+
+  if (!metadata.width || !metadata.height) {
+    return;
+  }
+
+  const { data } = await image.raw().toBuffer({ resolveWithObject: true });
+  const bgColor = estimateBackgroundColor(data, metadata.width, metadata.height);
+  const tolerance = 35;
+  const pixelCount = metadata.width * metadata.height;
+  const outputBuffer = Buffer.alloc(data.length);
+
+  for (let i = 0; i < pixelCount; i += 1) {
+    const idx = i * 4;
+    const r = data[idx];
+    const g = data[idx + 1];
+    const b = data[idx + 2];
+    const a = data[idx + 3];
+
+    if (a > 0 && isSimilarColor(r, g, b, bgColor, tolerance)) {
+      outputBuffer[idx] = r;
+      outputBuffer[idx + 1] = g;
+      outputBuffer[idx + 2] = b;
+      outputBuffer[idx + 3] = 0;
+    } else {
+      outputBuffer[idx] = r;
+      outputBuffer[idx + 1] = g;
+      outputBuffer[idx + 2] = b;
+      outputBuffer[idx + 3] = a;
+    }
+  }
+
+  await sharp(outputBuffer, {
+    raw: {
+      width: metadata.width,
+      height: metadata.height,
+      channels: 4
+    }
+  }).png().toFile(inputPath);
+}
+
+function estimateBackgroundColor(data, width, height) {
+  const samples = [];
+  const corners = [
+    { x: 0, y: 0 },
+    { x: width - 1, y: 0 },
+    { x: 0, y: height - 1 },
+    { x: width - 1, y: height - 1 }
+  ];
+
+  corners.forEach((point) => {
+    const idx = (point.y * width + point.x) * 4;
+    samples.push({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
+  });
+
+  const average = samples.reduce(
+    (acc, current) => ({
+      r: acc.r + current.r,
+      g: acc.g + current.g,
+      b: acc.b + current.b
+    }),
+    { r: 0, g: 0, b: 0 }
+  );
+
+  return {
+    r: Math.round(average.r / samples.length),
+    g: Math.round(average.g / samples.length),
+    b: Math.round(average.b / samples.length)
+  };
+}
+
+function isSimilarColor(r, g, b, target, tolerance) {
+  return (
+    Math.abs(r - target.r) <= tolerance &&
+    Math.abs(g - target.g) <= tolerance &&
+    Math.abs(b - target.b) <= tolerance
+  );
 }
 
 async function sliceFrames(inputPath, settings) {

@@ -36,10 +36,19 @@
         <h2>Upload and Convert</h2>
 
         <form method="post" enctype="multipart/form-data" class="form">
-            <label class="field">
+            <label class="field drop-zone" id="dropZone">
                 <span>Image file</span>
-                <input type="file" name="sprite" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" required>
+                <input type="file" id="spriteInput" name="sprite" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" required>
+                <p class="drop-zone-hint">Upload, drag & drop, or paste an image here.</p>
             </label>
+
+            <section class="preview-section">
+                <h2>Background removed preview</h2>
+                <div class="preview-box" id="uploadPreviewContainer">
+                    <img id="uploadPreview" src="" alt="Upload preview" hidden>
+                    <div class="preview-placeholder">Upload, drag & drop, or paste an image to preview the removed background.</div>
+                </div>
+            </section>
 
             <label class="checkbox">
                 <input type="checkbox" name="slice_enabled" value="1" id="sliceEnabled">
