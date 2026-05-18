@@ -1,6 +1,6 @@
-# Sprite GIF Converter / Editor for XAMPP
+# Sprite GIF Converter / Editor (Node.js)
 
-A small PHP app that lets you upload a sprite image, optionally slice it into frames, convert it to GIF, preview it, and download the result.
+A Node.js app that lets you upload a sprite image, optionally slice it into frames, convert it to GIF, preview it, and download the result.
 
 ## Features
 
@@ -8,52 +8,49 @@ A small PHP app that lets you upload a sprite image, optionally slice it into fr
 - Convert a single image into GIF.
 - Slice a sprite sheet into frames.
 - Build an animated GIF from sprite-sheet frames.
-- Set frame width, height, start position, frame count, frame delay, and direction.
+- Set frame width, height, start position, frame count, frame delay, direction, and loop.
 - Preview and download the generated GIF.
-- Runs locally in XAMPP.
+- Runs with Node.js and Express.
 
 ## Requirements
 
-- XAMPP with PHP 8+
-- PHP GD extension enabled
-- ImageMagick `convert` command recommended for animated GIF output
+- Node.js 18+ (or compatible runtime)
 
-### Important
+## Install
 
-PHP GD can save static GIF files, but it cannot natively assemble high-quality animated GIFs by itself.  
-This app uses ImageMagick when available for animated GIF generation.
+From the project folder:
 
-If ImageMagick is not installed, the app will still create a static GIF from the first frame.
+```bash
+npm install
+```
 
-## XAMPP Setup
+## Run locally
 
-1. Copy the `sprite-gif-editor` folder into:
+```bash
+npm start
+```
 
-   `C:\xampp\htdocs\`
+Then open:
 
-2. Start Apache from the XAMPP Control Panel.
+```text
+http://localhost:3000
+```
 
-3. Open:
+## Render.com deployment
 
-   `http://localhost/sprite-gif-editor/`
+For Render, use a `Web Service` with these settings:
 
-4. Make sure these folders are writable:
+- Environment: `Node`
+- Build Command: `npm install`
+- Start Command: `npm start`
 
-   - `uploads`
-   - `outputs`
+If Render still asks for a build command, `npm install` is the correct value for this project.
 
-## Optional: Install ImageMagick on Windows
+## Notes
 
-1. Download ImageMagick for Windows.
-2. During installation, enable:
-   - Add application directory to your system path
-   - Install legacy utilities, if available
-3. Restart Apache.
-4. In Command Prompt, test:
-
-   `magick -version`
-
-The app tries `magick` first, then `convert`.
+- The app saves uploaded images in `uploads/` and GIF outputs in `outputs/`.
+- `uploads/` and `outputs/` must be writable by the server.
+- Animated GIF generation is handled directly in Node, so ImageMagick is not required.
 
 ## Usage
 
@@ -73,4 +70,4 @@ For a sprite sheet:
 
 ## Security Note
 
-This is intended for local/offline use in XAMPP. If you deploy it publicly, add stricter validation, authentication, rate limits, and cleanup jobs.
+This project is intended for local or small-scale use. If you deploy it publicly, add stricter validation, authentication, rate limits, and cleanup jobs.
