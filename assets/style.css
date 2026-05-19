@@ -199,8 +199,26 @@ p {
     background: #6650a4;
 }
 
+.manual-splice-panel {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+    background: #121722;
+    border: 1px solid #2d3445;
+    border-radius: 14px;
+}
+
+.manual-splice-panel h3 {
+    margin: 0;
+}
+
+.manual-splice-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
 .splice-notice,
-.sprite-hint {
+.sprite-hint,
+.manual-splice-message {
     padding: 14px 16px;
     background: #111a2a;
     border: 1px solid #47608f;
@@ -210,7 +228,8 @@ p {
 }
 
 .splice-notice strong,
-.sprite-hint strong {
+.sprite-hint strong,
+.manual-splice-message strong {
     color: #eef2ff;
 }
 

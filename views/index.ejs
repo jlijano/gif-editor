@@ -57,9 +57,55 @@
             <div class="frame-actions">
                 <button type="button" class="button" id="addFrameButton">+ Add frame</button>
                 <button type="button" class="button splice-button is-hidden" id="spliceFrameButton">Splice image</button>
+                <button type="button" class="button" id="manualSpliceToggle">Manual crop</button>
             </div>
 
             <div class="splice-notice is-hidden" id="spliceNotice" role="status"></div>
+
+            <section class="manual-splice-panel is-hidden" id="manualSplicePanel">
+                <h3>Manual crop</h3>
+                <div class="grid manual-splice-grid">
+                    <label class="field">
+                        <span>Source frame</span>
+                        <select id="manualSourceFrame"></select>
+                    </label>
+
+                    <label class="field">
+                        <span>Crop width</span>
+                        <input type="number" id="manualFrameWidth" min="1" value="32">
+                    </label>
+
+                    <label class="field">
+                        <span>Crop height</span>
+                        <input type="number" id="manualFrameHeight" min="1" value="32">
+                    </label>
+
+                    <label class="field">
+                        <span>Start X</span>
+                        <input type="number" id="manualStartX" min="0" value="0">
+                    </label>
+
+                    <label class="field">
+                        <span>Start Y</span>
+                        <input type="number" id="manualStartY" min="0" value="0">
+                    </label>
+
+                    <label class="field">
+                        <span>Frames</span>
+                        <input type="number" id="manualFrameCount" min="2" max="12" value="4">
+                    </label>
+
+                    <label class="field">
+                        <span>Direction</span>
+                        <select id="manualDirection">
+                            <option value="horizontal">Horizontal</option>
+                            <option value="vertical">Vertical</option>
+                        </select>
+                    </label>
+                </div>
+                <button type="button" class="button splice-button" id="manualSpliceButton">Apply manual crop</button>
+                <div class="manual-splice-message is-hidden" id="manualSpliceMessage" role="status"></div>
+            </section>
 
             <label class="field drop-zone" id="dropZone">
                 <span>Quick upload</span>

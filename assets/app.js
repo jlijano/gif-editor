@@ -2,6 +2,17 @@ const dropZone = document.getElementById('dropZone');
 const framesContainer = document.getElementById('framesContainer');
 const addFrameButton = document.getElementById('addFrameButton');
 const spliceFrameButton = document.getElementById('spliceFrameButton');
+const manualSpliceToggle = document.getElementById('manualSpliceToggle');
+const manualSplicePanel = document.getElementById('manualSplicePanel');
+const manualSpliceButton = document.getElementById('manualSpliceButton');
+const manualSpliceMessage = document.getElementById('manualSpliceMessage');
+const manualSourceFrameSelect = document.getElementById('manualSourceFrame');
+const manualFrameWidthInput = document.getElementById('manualFrameWidth');
+const manualFrameHeightInput = document.getElementById('manualFrameHeight');
+const manualStartXInput = document.getElementById('manualStartX');
+const manualStartYInput = document.getElementById('manualStartY');
+const manualFrameCountInput = document.getElementById('manualFrameCount');
+const manualDirectionSelect = document.getElementById('manualDirection');
 const spliceNotice = document.getElementById('spliceNotice');
 const hint = document.querySelector('.drop-zone-hint');
 const previewGrid = document.getElementById('previewGrid');
@@ -21,6 +32,7 @@ const MAX_FRAMES = 12;
 
 let pendingSplice = null;
 let lastChangedFrameInput = null;
+let currentImageItems = [];
 let previewUpdateId = 0;
 
 function getFileInputs() {
@@ -54,6 +66,22 @@ function markUserEdited(input) {
             updateSelectedPreviews();
         }
     });
+}
+
+function markManualUserEdited(input) {
+    if (!input) return;
+    const eventName = input.tagName === 'SELECT' ? 'change' : 'input';
+    input.addEventListener(eventName, () => {
+        input.dataset.userEdited = 'true';
+        hideManualMessage();
+    });
+}
+
+function setManualValue(input, value, force = false) {
+    if (!input) return;
+    if (force || !wasUserEdited(input)) {
+        input.value = `${value}`;
+    }
 }
 
 function setDimensionValue(input, value, userAccepted = false) {
@@ -189,6 +217,43 @@ function resetSuggestedSizes() {
     if (frameHeightInput && !wasUserEdited(frameHeightInput)) frameHeightInput.value = '32';
 }
 
+function updateManualSourceOptions(items) {
+    if (!manualSourceFrameSelect) return;
+
+    const previousValue = manualSourceFrameSelect.value;
+    manualSourceFrameSelect.innerHTML = '';
+
+    if (items.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No image selected';
+        manualSourceFrameSelect.appendChild(option);
+        manualSourceFrameSelect.disabled = true;
+        if (manualSpliceButton) manualSpliceButton.disabled = true;
+        return;
+    }
+
+    items.forEach((item) => {
+        const option = document.createElement('option');
+        option.value = `${item.index}`;
+        option.textContent = `Frame ${item.index + 1} - ${item.file.name}`;
+        manualSourceFrameSelect.appendChild(option);
+    });
+
+    manualSourceFrameSelect.disabled = false;
+    if (manualSpliceButton) manualSpliceButton.disabled = false;
+
+    const hasPrevious = items.some((item) => `${item.index}` === previousValue);
+    if (hasPrevious) {
+        manualSourceFrameSelect.value = previousValue;
+    } else if (lastChangedFrameInput) {
+        const selected = items.find((item) => item.input === lastChangedFrameInput);
+        manualSourceFrameSelect.value = selected ? `${selected.index}` : `${items[0].index}`;
+    } else {
+        manualSourceFrameSelect.value = `${items[0].index}`;
+    }
+}
+
 async function updateSelectedPreviews() {
     const updateId = ++previewUpdateId;
     const inputs = getFileInputs();
@@ -210,6 +275,8 @@ async function updateSelectedPreviews() {
         if (previewGrid) {
             previewGrid.innerHTML = '<div class="preview-placeholder">Select at least 2 frames to preview and convert.</div>';
         }
+        currentImageItems = [];
+        updateManualSourceOptions([]);
         resetSuggestedSizes();
         clearSpliceSuggestion();
         return;
@@ -262,7 +329,9 @@ async function updateSelectedPreviews() {
         updateSuggestedSizes(sizes);
     }
 
-    updateFrameSpliceSuggestion(loadedItems.filter((item) => !item.error));
+    currentImageItems = loadedItems.filter((item) => !item.error);
+    updateManualSourceOptions(currentImageItems);
+    updateFrameSpliceSuggestion(currentImageItems);
 }
 
 function renderUnableToPreview(input) {
@@ -392,10 +461,41 @@ function analyzeSpriteStrip(img, file, input = null, index = 0) {
         direction,
         sourceWidth: width,
         sourceHeight: height,
+        startX: 0,
+        startY: 0,
         frameWidth,
         frameHeight,
         frameCount
     };
+}
+
+function syncManualDefaultsFromCandidate(candidate) {
+    if (!candidate) return;
+
+    if (manualSourceFrameSelect && candidate.index !== undefined) {
+        manualSourceFrameSelect.value = `${candidate.index}`;
+    }
+
+    setManualValue(manualFrameWidthInput, candidate.frameWidth);
+    setManualValue(manualFrameHeightInput, candidate.frameHeight);
+    setManualValue(manualStartXInput, candidate.startX || 0);
+    setManualValue(manualStartYInput, candidate.startY || 0);
+    setManualValue(manualFrameCountInput, Math.min(candidate.frameCount, MAX_FRAMES));
+    setManualValue(manualDirectionSelect, candidate.direction);
+}
+
+function syncManualDefaultsFromItem(item) {
+    if (!item) return;
+
+    const width = getPositiveInteger(frameWidthInput && frameWidthInput.value) || item.width;
+    const height = getPositiveInteger(frameHeightInput && frameHeightInput.value) || item.height;
+
+    setManualValue(manualFrameWidthInput, Math.min(width, item.width));
+    setManualValue(manualFrameHeightInput, Math.min(height, item.height));
+    setManualValue(manualStartXInput, 0);
+    setManualValue(manualStartYInput, 0);
+    setManualValue(manualFrameCountInput, 2);
+    setManualValue(manualDirectionSelect, item.width >= item.height ? 'horizontal' : 'vertical');
 }
 
 function updateFrameSpliceSuggestion(items) {
@@ -404,11 +504,13 @@ function updateFrameSpliceSuggestion(items) {
         .filter(Boolean);
 
     if (candidates.length === 0) {
+        syncManualDefaultsFromItem(items[0]);
         clearSpliceSuggestion();
         return;
     }
 
     pendingSplice = candidates.find((candidate) => candidate.input === lastChangedFrameInput) || candidates[0];
+    syncManualDefaultsFromCandidate(pendingSplice);
     showFrameSpliceSuggestion(pendingSplice);
 }
 
@@ -449,24 +551,97 @@ function clearSpliceSuggestion() {
     }
 }
 
-async function splicePendingImage() {
-    if (!pendingSplice || !framesContainer) return;
+function showManualMessage(message) {
+    if (!manualSpliceMessage) return;
+    manualSpliceMessage.classList.remove('is-hidden');
+    manualSpliceMessage.innerHTML = message;
+}
+
+function hideManualMessage() {
+    if (!manualSpliceMessage) return;
+    manualSpliceMessage.classList.add('is-hidden');
+    manualSpliceMessage.textContent = '';
+}
+
+function getSelectedManualSourceItem() {
+    if (currentImageItems.length === 0) return null;
+
+    const selectedIndex = manualSourceFrameSelect ? manualSourceFrameSelect.value : '';
+    return currentImageItems.find((item) => `${item.index}` === selectedIndex)
+        || currentImageItems.find((item) => item.input === lastChangedFrameInput)
+        || currentImageItems[0];
+}
+
+function buildManualSpliceCandidate() {
+    const item = getSelectedManualSourceItem();
+    if (!item) {
+        showManualMessage('<strong>Manual crop:</strong> select an image first.');
+        return null;
+    }
+
+    const frameWidth = getPositiveInteger(manualFrameWidthInput && manualFrameWidthInput.value);
+    const frameHeight = getPositiveInteger(manualFrameHeightInput && manualFrameHeightInput.value);
+    const startX = Math.max(0, parseInt(manualStartXInput && manualStartXInput.value, 10) || 0);
+    const startY = Math.max(0, parseInt(manualStartYInput && manualStartYInput.value, 10) || 0);
+    const requestedCount = Math.min(MAX_FRAMES, getPositiveInteger(manualFrameCountInput && manualFrameCountInput.value) || 0);
+    const direction = manualDirectionSelect && manualDirectionSelect.value === 'vertical' ? 'vertical' : 'horizontal';
+
+    if (!frameWidth || !frameHeight || !requestedCount) {
+        showManualMessage('<strong>Manual crop:</strong> enter crop width, crop height, and frame count.');
+        return null;
+    }
+
+    if (startX + frameWidth > item.width || startY + frameHeight > item.height) {
+        showManualMessage('<strong>Manual crop:</strong> the crop box is outside the source image.');
+        return null;
+    }
+
+    const availableLength = direction === 'horizontal'
+        ? item.width - startX
+        : item.height - startY;
+    const frameLength = direction === 'horizontal' ? frameWidth : frameHeight;
+    const maxFrameCount = Math.min(MAX_FRAMES, Math.floor(availableLength / frameLength));
+    const frameCount = Math.min(requestedCount, maxFrameCount);
+
+    if (frameCount < 2) {
+        showManualMessage('<strong>Manual crop:</strong> at least 2 frames must fit inside the source image.');
+        return null;
+    }
+
+    return {
+        file: item.file,
+        img: item.img,
+        input: item.input,
+        index: item.index,
+        direction,
+        sourceWidth: item.width,
+        sourceHeight: item.height,
+        startX,
+        startY,
+        frameWidth,
+        frameHeight,
+        frameCount,
+        requestedCount
+    };
+}
+
+async function applySpliceCandidate(candidate, messageTarget = spliceNotice, source = 'auto') {
+    if (!candidate || !framesContainer) return;
 
     if (typeof DataTransfer === 'undefined' || typeof File === 'undefined') {
-        if (spliceNotice) {
-            spliceNotice.classList.remove('is-hidden');
-            spliceNotice.innerHTML = '<strong>Unable to splice:</strong> this browser does not support creating frame files from the image.';
+        if (messageTarget) {
+            messageTarget.classList.remove('is-hidden');
+            messageTarget.innerHTML = '<strong>Unable to splice:</strong> this browser does not support creating frame files from the image.';
         }
         return;
     }
 
-    const candidate = pendingSplice;
     const frameTotal = Math.min(candidate.frameCount, MAX_FRAMES);
     const files = await createSplicedFrameFiles(candidate, frameTotal);
     if (files.length < 2) {
-        if (spliceNotice) {
-            spliceNotice.classList.remove('is-hidden');
-            spliceNotice.innerHTML = '<strong>Unable to splice:</strong> the image did not produce enough frames.';
+        if (messageTarget) {
+            messageTarget.classList.remove('is-hidden');
+            messageTarget.innerHTML = '<strong>Unable to splice:</strong> the image did not produce enough frames.';
         }
         return;
     }
@@ -489,13 +664,27 @@ async function splicePendingImage() {
     await updateSelectedPreviews();
 
     updateHint(`Spliced ${files.length} frame(s) from ${candidate.file.name}`);
-    if (spliceNotice) {
-        spliceNotice.classList.remove('is-hidden');
-        spliceNotice.innerHTML = `<strong>Spliced:</strong> created ${files.length} uniform ${candidate.frameWidth}x${candidate.frameHeight} frame(s) from ${escapeHtml(candidate.file.name)}.`;
+    if (messageTarget) {
+        const limited = candidate.requestedCount && candidate.requestedCount > files.length
+            ? ` Requested ${candidate.requestedCount}, created ${files.length} that fit.`
+            : '';
+        messageTarget.classList.remove('is-hidden');
+        messageTarget.innerHTML = `<strong>${source === 'manual' ? 'Manual crop applied' : 'Spliced'}:</strong> created ${files.length} uniform ${candidate.frameWidth}x${candidate.frameHeight} frame(s) from ${escapeHtml(candidate.file.name)}.${limited}`;
     }
     if (spliceFrameButton) {
         spliceFrameButton.classList.add('is-hidden');
     }
+}
+
+async function splicePendingImage() {
+    if (!pendingSplice) return;
+    await applySpliceCandidate(pendingSplice, spliceNotice, 'auto');
+}
+
+async function applyManualSplice() {
+    const candidate = buildManualSpliceCandidate();
+    if (!candidate) return;
+    await applySpliceCandidate(candidate, manualSpliceMessage, 'manual');
 }
 
 async function createSplicedFrameFiles(candidate, frameTotal) {
@@ -505,10 +694,12 @@ async function createSplicedFrameFiles(candidate, frameTotal) {
     canvas.height = candidate.frameHeight;
     const ctx = canvas.getContext('2d');
     const baseName = candidate.file.name.replace(/\.[^.]+$/, '') || 'frame';
+    const startX = candidate.startX || 0;
+    const startY = candidate.startY || 0;
 
     for (let index = 0; index < frameTotal; index += 1) {
-        const sourceX = candidate.direction === 'horizontal' ? index * candidate.frameWidth : 0;
-        const sourceY = candidate.direction === 'vertical' ? index * candidate.frameHeight : 0;
+        const sourceX = startX + (candidate.direction === 'horizontal' ? index * candidate.frameWidth : 0);
+        const sourceY = startY + (candidate.direction === 'vertical' ? index * candidate.frameHeight : 0);
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(
@@ -665,6 +856,14 @@ function setUploadMode(mode) {
 
 markUserEdited(frameWidthInput);
 markUserEdited(frameHeightInput);
+[
+    manualFrameWidthInput,
+    manualFrameHeightInput,
+    manualStartXInput,
+    manualStartYInput,
+    manualFrameCountInput,
+    manualDirectionSelect
+].forEach(markManualUserEdited);
 initializeFrameInputs();
 
 if (addFrameButton) {
@@ -677,6 +876,31 @@ if (addFrameButton) {
 
 if (spliceFrameButton) {
     spliceFrameButton.addEventListener('click', splicePendingImage);
+}
+
+if (manualSpliceToggle && manualSplicePanel) {
+    manualSpliceToggle.addEventListener('click', () => {
+        manualSplicePanel.classList.toggle('is-hidden');
+    });
+}
+
+if (manualSourceFrameSelect) {
+    manualSourceFrameSelect.addEventListener('change', () => {
+        hideManualMessage();
+        const item = getSelectedManualSourceItem();
+        if (!item) return;
+
+        const candidate = analyzeSpriteStrip(item.img, item.file, item.input, item.index);
+        if (candidate) {
+            syncManualDefaultsFromCandidate(candidate);
+        } else {
+            syncManualDefaultsFromItem(item);
+        }
+    });
+}
+
+if (manualSpliceButton) {
+    manualSpliceButton.addEventListener('click', applyManualSplice);
 }
 
 if (dropZone) {
