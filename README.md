@@ -9,7 +9,7 @@ A Node.js app that lets you upload a sprite image, optionally slice it into fram
 - Remove background from uploaded images automatically.
 - Slice a sprite sheet into frames.
 - Detect tall or wide sprite strips and offer to splice them into uniform frames.
-- Manually crop/splice an uploaded image by source frame, crop size, start position, direction, and frame count.
+- Manually crop/splice an uploaded image with a visual crop box, frame-count slider, direction, and source frame selector.
 - Build an animated GIF from sprite-sheet frames.
 - Set frame width, height, start position, frame count, frame delay, direction, and loop.
 - Preview and download the generated GIF.

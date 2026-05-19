@@ -7,11 +7,12 @@ const manualSplicePanel = document.getElementById('manualSplicePanel');
 const manualSpliceButton = document.getElementById('manualSpliceButton');
 const manualSpliceMessage = document.getElementById('manualSpliceMessage');
 const manualSourceFrameSelect = document.getElementById('manualSourceFrame');
-const manualFrameWidthInput = document.getElementById('manualFrameWidth');
-const manualFrameHeightInput = document.getElementById('manualFrameHeight');
-const manualStartXInput = document.getElementById('manualStartX');
-const manualStartYInput = document.getElementById('manualStartY');
+const manualCropStage = document.getElementById('manualCropStage');
+const manualCropCanvas = document.getElementById('manualCropCanvas');
+const manualCropInfo = document.getElementById('manualCropInfo');
+const manualCropResetButton = document.getElementById('manualCropResetButton');
 const manualFrameCountInput = document.getElementById('manualFrameCount');
+const manualFrameCountValue = document.getElementById('manualFrameCountValue');
 const manualDirectionSelect = document.getElementById('manualDirection');
 const spliceNotice = document.getElementById('spliceNotice');
 const hint = document.querySelector('.drop-zone-hint');
@@ -33,6 +34,12 @@ const MAX_FRAMES = 12;
 let pendingSplice = null;
 let lastChangedFrameInput = null;
 let currentImageItems = [];
+let manualCropState = {
+    item: null,
+    rect: { x: 0, y: 0, width: 32, height: 32 },
+    display: { scale: 1, width: 0, height: 0 },
+    drag: null
+};
 let previewUpdateId = 0;
 
 function getFileInputs() {
@@ -52,6 +59,10 @@ function getFrameFieldName() {
 function getPositiveInteger(value) {
     const parsed = parseInt(value, 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
 }
 
 function wasUserEdited(input) {
@@ -74,6 +85,8 @@ function markManualUserEdited(input) {
     input.addEventListener(eventName, () => {
         input.dataset.userEdited = 'true';
         hideManualMessage();
+        updateManualCropInfo();
+        renderManualCropper();
     });
 }
 
@@ -230,6 +243,7 @@ function updateManualSourceOptions(items) {
         manualSourceFrameSelect.appendChild(option);
         manualSourceFrameSelect.disabled = true;
         if (manualSpliceButton) manualSpliceButton.disabled = true;
+        setManualCropSelection(null);
         return;
     }
 
@@ -252,6 +266,357 @@ function updateManualSourceOptions(items) {
     } else {
         manualSourceFrameSelect.value = `${items[0].index}`;
     }
+}
+
+function getManualDirection() {
+    return manualDirectionSelect && manualDirectionSelect.value === 'vertical' ? 'vertical' : 'horizontal';
+}
+
+function getManualFrameCountValue() {
+    return clamp(getPositiveInteger(manualFrameCountInput && manualFrameCountInput.value) || 2, 2, MAX_FRAMES);
+}
+
+function normalizeCropRect(rect, item) {
+    if (!item) {
+        return { x: 0, y: 0, width: 1, height: 1 };
+    }
+
+    const width = clamp(Math.round(rect.width || 1), 1, item.width);
+    const height = clamp(Math.round(rect.height || 1), 1, item.height);
+    const x = clamp(Math.round(rect.x || 0), 0, Math.max(0, item.width - width));
+    const y = clamp(Math.round(rect.y || 0), 0, Math.max(0, item.height - height));
+
+    return { x, y, width, height };
+}
+
+function getManualDefaultRect(item) {
+    if (!item) return { x: 0, y: 0, width: 32, height: 32 };
+
+    const width = getPositiveInteger(frameWidthInput && frameWidthInput.value);
+    const height = getPositiveInteger(frameHeightInput && frameHeightInput.value);
+
+    return normalizeCropRect({
+        x: 0,
+        y: 0,
+        width: width > 0 ? Math.min(width, item.width) : Math.min(item.width, item.height),
+        height: height > 0 ? Math.min(height, item.height) : Math.min(item.width, item.height)
+    }, item);
+}
+
+function setManualCropSelection(item, rect = null, force = false) {
+    if (!item) {
+        manualCropState.item = null;
+        manualCropState.rect = { x: 0, y: 0, width: 32, height: 32 };
+        manualCropState.drag = null;
+        manualCropState.userEdited = false;
+        updateManualCropInfo();
+        renderManualCropper();
+        return;
+    }
+
+    const sameItem = manualCropState.item && manualCropState.item.file === item.file && manualCropState.item.index === item.index;
+    manualCropState.item = item;
+
+    if (force || !sameItem || !manualCropState.userEdited) {
+        manualCropState.rect = normalizeCropRect(rect || getManualDefaultRect(item), item);
+        manualCropState.userEdited = false;
+    } else {
+        manualCropState.rect = normalizeCropRect(manualCropState.rect, item);
+    }
+
+    updateManualCropInfo();
+    renderManualCropper();
+}
+
+function getManualMaxFrameCount(rect = manualCropState.rect, item = manualCropState.item) {
+    if (!item || !rect) return 1;
+
+    const direction = getManualDirection();
+    const availableLength = direction === 'horizontal'
+        ? item.width - rect.x
+        : item.height - rect.y;
+    const frameLength = direction === 'horizontal' ? rect.width : rect.height;
+
+    return Math.max(1, Math.min(MAX_FRAMES, Math.floor(availableLength / Math.max(1, frameLength))));
+}
+
+function updateManualCropInfo() {
+    const item = manualCropState.item;
+
+    if (!item) {
+        if (manualCropInfo) manualCropInfo.textContent = 'No image selected';
+        if (manualFrameCountValue) manualFrameCountValue.textContent = '0';
+        if (manualFrameCountInput) manualFrameCountInput.disabled = true;
+        if (manualCropResetButton) manualCropResetButton.disabled = true;
+        if (manualSpliceButton) manualSpliceButton.disabled = true;
+        return;
+    }
+
+    manualCropState.rect = normalizeCropRect(manualCropState.rect, item);
+    const rect = manualCropState.rect;
+    const maxFrameCount = getManualMaxFrameCount(rect, item);
+    const usableMax = Math.max(2, maxFrameCount);
+
+    if (manualFrameCountInput) {
+        manualFrameCountInput.disabled = maxFrameCount < 2;
+        manualFrameCountInput.max = `${usableMax}`;
+        if (getManualFrameCountValue() > usableMax) {
+            manualFrameCountInput.value = `${usableMax}`;
+        }
+    }
+
+    const selectedCount = maxFrameCount < 2
+        ? maxFrameCount
+        : Math.min(getManualFrameCountValue(), maxFrameCount);
+
+    if (manualFrameCountValue) {
+        manualFrameCountValue.textContent = `${selectedCount}`;
+    }
+
+    if (manualCropInfo) {
+        manualCropInfo.textContent = `Selected crop - ${selectedCount} frame(s) fit`;
+    }
+
+    if (manualCropResetButton) manualCropResetButton.disabled = false;
+    if (manualSpliceButton) manualSpliceButton.disabled = maxFrameCount < 2;
+}
+
+function getManualFrameRects() {
+    const item = manualCropState.item;
+    if (!item) return [];
+
+    const rect = normalizeCropRect(manualCropState.rect, item);
+    const direction = getManualDirection();
+    const maxFrameCount = getManualMaxFrameCount(rect, item);
+    const frameCount = Math.min(getManualFrameCountValue(), maxFrameCount);
+    const rects = [];
+
+    for (let index = 0; index < frameCount; index += 1) {
+        rects.push({
+            x: rect.x + (direction === 'horizontal' ? index * rect.width : 0),
+            y: rect.y + (direction === 'vertical' ? index * rect.height : 0),
+            width: rect.width,
+            height: rect.height
+        });
+    }
+
+    return rects;
+}
+
+function drawCanvasPlaceholder() {
+    if (!manualCropCanvas) return;
+
+    const ctx = manualCropCanvas.getContext('2d');
+    const width = 640;
+    const height = 260;
+    const dpr = window.devicePixelRatio || 1;
+
+    manualCropCanvas.width = width * dpr;
+    manualCropCanvas.height = height * dpr;
+    manualCropCanvas.style.width = '100%';
+    manualCropCanvas.style.height = `${height}px`;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = '#0f131b';
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = '#8fa1c5';
+    ctx.font = '14px Arial, Helvetica, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('No image selected', width / 2, height / 2);
+}
+
+function renderManualCropper() {
+    if (!manualCropCanvas) return;
+
+    const item = manualCropState.item;
+    if (!item) {
+        drawCanvasPlaceholder();
+        return;
+    }
+
+    const stageWidth = manualCropStage ? Math.max(260, manualCropStage.clientWidth - 24) : 640;
+    const maxHeight = 420;
+    const dpr = window.devicePixelRatio || 1;
+    const scale = Math.max(0.05, Math.min(stageWidth / item.width, maxHeight / item.height, 4));
+    const canvasWidth = Math.max(1, Math.round(item.width * scale));
+    const canvasHeight = Math.max(1, Math.round(item.height * scale));
+    const ctx = manualCropCanvas.getContext('2d');
+
+    manualCropState.display = { scale, width: canvasWidth, height: canvasHeight };
+    manualCropCanvas.width = canvasWidth * dpr;
+    manualCropCanvas.height = canvasHeight * dpr;
+    manualCropCanvas.style.width = `${canvasWidth}px`;
+    manualCropCanvas.style.height = `${canvasHeight}px`;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(item.img, 0, 0, canvasWidth, canvasHeight);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    const frameRects = getManualFrameRects();
+    frameRects.forEach((frameRect, index) => {
+        ctx.drawImage(
+            item.img,
+            frameRect.x,
+            frameRect.y,
+            frameRect.width,
+            frameRect.height,
+            frameRect.x * scale,
+            frameRect.y * scale,
+            frameRect.width * scale,
+            frameRect.height * scale
+        );
+
+        ctx.strokeStyle = index === 0 ? '#f8d66d' : 'rgba(109, 140, 255, 0.85)';
+        ctx.lineWidth = index === 0 ? 2 : 1;
+        ctx.strokeRect(
+            Math.round(frameRect.x * scale) + 0.5,
+            Math.round(frameRect.y * scale) + 0.5,
+            Math.round(frameRect.width * scale),
+            Math.round(frameRect.height * scale)
+        );
+    });
+
+    drawManualCropHandles(ctx);
+}
+
+function getManualCropHandles(rect = manualCropState.rect) {
+    const left = rect.x;
+    const centerX = rect.x + rect.width / 2;
+    const right = rect.x + rect.width;
+    const top = rect.y;
+    const centerY = rect.y + rect.height / 2;
+    const bottom = rect.y + rect.height;
+
+    return [
+        { name: 'nw', x: left, y: top },
+        { name: 'n', x: centerX, y: top },
+        { name: 'ne', x: right, y: top },
+        { name: 'e', x: right, y: centerY },
+        { name: 'se', x: right, y: bottom },
+        { name: 's', x: centerX, y: bottom },
+        { name: 'sw', x: left, y: bottom },
+        { name: 'w', x: left, y: centerY }
+    ];
+}
+
+function drawManualCropHandles(ctx) {
+    const item = manualCropState.item;
+    if (!item) return;
+
+    const scale = manualCropState.display.scale;
+    const size = 9;
+
+    ctx.fillStyle = '#f8d66d';
+    ctx.strokeStyle = '#0f131b';
+    ctx.lineWidth = 2;
+
+    getManualCropHandles().forEach((handle) => {
+        const x = handle.x * scale;
+        const y = handle.y * scale;
+        ctx.fillRect(x - size / 2, y - size / 2, size, size);
+        ctx.strokeRect(x - size / 2, y - size / 2, size, size);
+    });
+}
+
+function getManualCanvasPoint(event) {
+    const item = manualCropState.item;
+    const canvasBounds = manualCropCanvas.getBoundingClientRect();
+
+    return {
+        x: clamp(((event.clientX - canvasBounds.left) / canvasBounds.width) * item.width, 0, item.width),
+        y: clamp(((event.clientY - canvasBounds.top) / canvasBounds.height) * item.height, 0, item.height)
+    };
+}
+
+function getManualCropHit(point) {
+    const rect = manualCropState.rect;
+    const tolerance = Math.max(6, 10 / manualCropState.display.scale);
+    const handle = getManualCropHandles(rect).find((item) => (
+        Math.abs(point.x - item.x) <= tolerance &&
+        Math.abs(point.y - item.y) <= tolerance
+    ));
+
+    if (handle) return handle.name;
+
+    if (
+        point.x >= rect.x &&
+        point.x <= rect.x + rect.width &&
+        point.y >= rect.y &&
+        point.y <= rect.y + rect.height
+    ) {
+        return 'move';
+    }
+
+    return 'draw';
+}
+
+function setManualCanvasCursor(hit) {
+    if (!manualCropCanvas) return;
+
+    const cursors = {
+        nw: 'nwse-resize',
+        se: 'nwse-resize',
+        ne: 'nesw-resize',
+        sw: 'nesw-resize',
+        n: 'ns-resize',
+        s: 'ns-resize',
+        e: 'ew-resize',
+        w: 'ew-resize',
+        move: 'move',
+        draw: 'crosshair'
+    };
+
+    manualCropCanvas.style.cursor = cursors[hit] || 'crosshair';
+}
+
+function updateManualCropFromDrag(point) {
+    const drag = manualCropState.drag;
+    const item = manualCropState.item;
+    if (!drag || !item) return;
+
+    const minSize = 1;
+    let rect = { ...drag.startRect };
+
+    if (drag.mode === 'move') {
+        rect.x = drag.startRect.x + point.x - drag.startPoint.x;
+        rect.y = drag.startRect.y + point.y - drag.startPoint.y;
+    } else if (drag.mode === 'draw') {
+        rect = {
+            x: Math.min(drag.startPoint.x, point.x),
+            y: Math.min(drag.startPoint.y, point.y),
+            width: Math.max(minSize, Math.abs(point.x - drag.startPoint.x)),
+            height: Math.max(minSize, Math.abs(point.y - drag.startPoint.y))
+        };
+    } else {
+        let left = drag.startRect.x;
+        let top = drag.startRect.y;
+        let right = drag.startRect.x + drag.startRect.width;
+        let bottom = drag.startRect.y + drag.startRect.height;
+
+        if (drag.mode.includes('w')) left = clamp(point.x, 0, right - minSize);
+        if (drag.mode.includes('e')) right = clamp(point.x, left + minSize, item.width);
+        if (drag.mode.includes('n')) top = clamp(point.y, 0, bottom - minSize);
+        if (drag.mode.includes('s')) bottom = clamp(point.y, top + minSize, item.height);
+
+        rect = {
+            x: left,
+            y: top,
+            width: right - left,
+            height: bottom - top
+        };
+    }
+
+    manualCropState.rect = normalizeCropRect(rect, item);
+    manualCropState.userEdited = true;
+    hideManualMessage();
+    updateManualCropInfo();
+    renderManualCropper();
 }
 
 async function updateSelectedPreviews() {
@@ -469,33 +834,31 @@ function analyzeSpriteStrip(img, file, input = null, index = 0) {
     };
 }
 
-function syncManualDefaultsFromCandidate(candidate) {
+function syncManualDefaultsFromCandidate(candidate, force = false) {
     if (!candidate) return;
 
     if (manualSourceFrameSelect && candidate.index !== undefined) {
         manualSourceFrameSelect.value = `${candidate.index}`;
     }
 
-    setManualValue(manualFrameWidthInput, candidate.frameWidth);
-    setManualValue(manualFrameHeightInput, candidate.frameHeight);
-    setManualValue(manualStartXInput, candidate.startX || 0);
-    setManualValue(manualStartYInput, candidate.startY || 0);
-    setManualValue(manualFrameCountInput, Math.min(candidate.frameCount, MAX_FRAMES));
-    setManualValue(manualDirectionSelect, candidate.direction);
+    setManualValue(manualFrameCountInput, Math.min(candidate.frameCount, MAX_FRAMES), force);
+    setManualValue(manualDirectionSelect, candidate.direction, force);
+
+    const item = currentImageItems.find((entry) => entry.file === candidate.file && entry.index === candidate.index);
+    setManualCropSelection(item || manualCropState.item, {
+        x: candidate.startX || 0,
+        y: candidate.startY || 0,
+        width: candidate.frameWidth,
+        height: candidate.frameHeight
+    }, force);
 }
 
-function syncManualDefaultsFromItem(item) {
+function syncManualDefaultsFromItem(item, force = false) {
     if (!item) return;
 
-    const width = getPositiveInteger(frameWidthInput && frameWidthInput.value) || item.width;
-    const height = getPositiveInteger(frameHeightInput && frameHeightInput.value) || item.height;
-
-    setManualValue(manualFrameWidthInput, Math.min(width, item.width));
-    setManualValue(manualFrameHeightInput, Math.min(height, item.height));
-    setManualValue(manualStartXInput, 0);
-    setManualValue(manualStartYInput, 0);
-    setManualValue(manualFrameCountInput, 2);
-    setManualValue(manualDirectionSelect, item.width >= item.height ? 'horizontal' : 'vertical');
+    setManualValue(manualFrameCountInput, 2, force);
+    setManualValue(manualDirectionSelect, item.width >= item.height ? 'horizontal' : 'vertical', force);
+    setManualCropSelection(item, getManualDefaultRect(item), force);
 }
 
 function updateFrameSpliceSuggestion(items) {
@@ -579,15 +942,20 @@ function buildManualSpliceCandidate() {
         return null;
     }
 
-    const frameWidth = getPositiveInteger(manualFrameWidthInput && manualFrameWidthInput.value);
-    const frameHeight = getPositiveInteger(manualFrameHeightInput && manualFrameHeightInput.value);
-    const startX = Math.max(0, parseInt(manualStartXInput && manualStartXInput.value, 10) || 0);
-    const startY = Math.max(0, parseInt(manualStartYInput && manualStartYInput.value, 10) || 0);
-    const requestedCount = Math.min(MAX_FRAMES, getPositiveInteger(manualFrameCountInput && manualFrameCountInput.value) || 0);
-    const direction = manualDirectionSelect && manualDirectionSelect.value === 'vertical' ? 'vertical' : 'horizontal';
+    if (manualCropState.item !== item) {
+        setManualCropSelection(item, getManualDefaultRect(item), true);
+    }
+
+    const rect = normalizeCropRect(manualCropState.rect, item);
+    const frameWidth = rect.width;
+    const frameHeight = rect.height;
+    const startX = rect.x;
+    const startY = rect.y;
+    const requestedCount = getManualFrameCountValue();
+    const direction = getManualDirection();
 
     if (!frameWidth || !frameHeight || !requestedCount) {
-        showManualMessage('<strong>Manual crop:</strong> enter crop width, crop height, and frame count.');
+        showManualMessage('<strong>Manual crop:</strong> select a crop area and frame count.');
         return null;
     }
 
@@ -857,10 +1225,6 @@ function setUploadMode(mode) {
 markUserEdited(frameWidthInput);
 markUserEdited(frameHeightInput);
 [
-    manualFrameWidthInput,
-    manualFrameHeightInput,
-    manualStartXInput,
-    manualStartYInput,
     manualFrameCountInput,
     manualDirectionSelect
 ].forEach(markManualUserEdited);
@@ -881,6 +1245,7 @@ if (spliceFrameButton) {
 if (manualSpliceToggle && manualSplicePanel) {
     manualSpliceToggle.addEventListener('click', () => {
         manualSplicePanel.classList.toggle('is-hidden');
+        renderManualCropper();
     });
 }
 
@@ -892,9 +1257,80 @@ if (manualSourceFrameSelect) {
 
         const candidate = analyzeSpriteStrip(item.img, item.file, item.input, item.index);
         if (candidate) {
-            syncManualDefaultsFromCandidate(candidate);
+            syncManualDefaultsFromCandidate(candidate, true);
         } else {
-            syncManualDefaultsFromItem(item);
+            syncManualDefaultsFromItem(item, true);
+        }
+    });
+}
+
+if (manualCropCanvas) {
+    manualCropCanvas.addEventListener('pointerdown', (event) => {
+        if (!manualCropState.item) return;
+
+        event.preventDefault();
+        const point = getManualCanvasPoint(event);
+        const hit = getManualCropHit(point);
+
+        manualCropState.drag = {
+            mode: hit,
+            startPoint: point,
+            startRect: { ...manualCropState.rect }
+        };
+
+        if (hit === 'draw') {
+            manualCropState.rect = normalizeCropRect({
+                x: point.x,
+                y: point.y,
+                width: 1,
+                height: 1
+            }, manualCropState.item);
+            manualCropState.userEdited = true;
+            updateManualCropInfo();
+            renderManualCropper();
+        }
+
+        manualCropCanvas.setPointerCapture(event.pointerId);
+    });
+
+    manualCropCanvas.addEventListener('pointermove', (event) => {
+        if (!manualCropState.item) return;
+
+        const point = getManualCanvasPoint(event);
+        if (manualCropState.drag) {
+            event.preventDefault();
+            updateManualCropFromDrag(point);
+            return;
+        }
+
+        setManualCanvasCursor(getManualCropHit(point));
+    });
+
+    manualCropCanvas.addEventListener('pointerup', (event) => {
+        manualCropState.drag = null;
+        if (manualCropCanvas.hasPointerCapture(event.pointerId)) {
+            manualCropCanvas.releasePointerCapture(event.pointerId);
+        }
+    });
+
+    manualCropCanvas.addEventListener('pointercancel', () => {
+        manualCropState.drag = null;
+    });
+}
+
+if (manualCropResetButton) {
+    manualCropResetButton.addEventListener('click', () => {
+        const item = getSelectedManualSourceItem();
+        if (!item) return;
+
+        const candidate = analyzeSpriteStrip(item.img, item.file, item.input, item.index);
+        manualCropState.userEdited = false;
+        hideManualMessage();
+
+        if (candidate) {
+            syncManualDefaultsFromCandidate(candidate, true);
+        } else {
+            syncManualDefaultsFromItem(item, true);
         }
     });
 }
@@ -940,5 +1376,7 @@ document.addEventListener('paste', (event) => {
 if (spriteInput) {
     spriteInput.addEventListener('change', handleSpriteFileChange);
 }
+
+window.addEventListener('resize', renderManualCropper);
 
 updateSelectedPreviews();

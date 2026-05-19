@@ -64,6 +64,12 @@
 
             <section class="manual-splice-panel is-hidden" id="manualSplicePanel">
                 <h3>Manual crop</h3>
+                <div class="manual-crop-layout">
+                    <div class="manual-crop-stage" id="manualCropStage">
+                        <canvas id="manualCropCanvas" width="640" height="360"></canvas>
+                    </div>
+                </div>
+
                 <div class="grid manual-splice-grid">
                     <label class="field">
                         <span>Source frame</span>
@@ -71,28 +77,8 @@
                     </label>
 
                     <label class="field">
-                        <span>Crop width</span>
-                        <input type="number" id="manualFrameWidth" min="1" value="32">
-                    </label>
-
-                    <label class="field">
-                        <span>Crop height</span>
-                        <input type="number" id="manualFrameHeight" min="1" value="32">
-                    </label>
-
-                    <label class="field">
-                        <span>Start X</span>
-                        <input type="number" id="manualStartX" min="0" value="0">
-                    </label>
-
-                    <label class="field">
-                        <span>Start Y</span>
-                        <input type="number" id="manualStartY" min="0" value="0">
-                    </label>
-
-                    <label class="field">
-                        <span>Frames</span>
-                        <input type="number" id="manualFrameCount" min="2" max="12" value="4">
+                        <span>Frames <strong id="manualFrameCountValue">4</strong></span>
+                        <input type="range" id="manualFrameCount" min="2" max="12" value="4">
                     </label>
 
                     <label class="field">
@@ -103,6 +89,8 @@
                         </select>
                     </label>
                 </div>
+                <div class="manual-crop-meta" id="manualCropInfo">No image selected</div>
+                <button type="button" class="button" id="manualCropResetButton">Reset crop</button>
                 <button type="button" class="button splice-button" id="manualSpliceButton">Apply manual crop</button>
                 <div class="manual-splice-message is-hidden" id="manualSpliceMessage" role="status"></div>
             </section>

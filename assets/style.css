@@ -212,8 +212,43 @@ p {
     margin: 0;
 }
 
+.manual-crop-layout {
+    display: grid;
+    gap: 12px;
+}
+
+.manual-crop-stage {
+    width: 100%;
+    min-height: 240px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    padding: 12px;
+    background: #0f131b;
+    border: 1px dashed #384257;
+    border-radius: 12px;
+    touch-action: none;
+}
+
+.manual-crop-stage canvas {
+    max-width: 100%;
+    border-radius: 8px;
+    image-rendering: pixelated;
+    cursor: crosshair;
+}
+
 .manual-splice-grid {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.manual-crop-meta {
+    color: #aab3c5;
+    font-size: 13px;
+}
+
+input[type="range"] {
+    padding: 0;
+    accent-color: #6d8cff;
 }
 
 .splice-notice,
