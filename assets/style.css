@@ -114,6 +114,21 @@ p {
     padding: 12px;
 }
 
+.frame-preview-card img {
+    width: 100%;
+    max-height: 150px;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+
+.frame-preview-meta {
+    margin-top: 8px;
+    color: #aab3c5;
+    font-size: 12px;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
 .frame-card {
     background: #0f131b;
     border: 1px solid #2d3445;
@@ -171,6 +186,32 @@ p {
 
 .preview-section {
     margin-top: 14px;
+}
+
+.frame-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.splice-button {
+    background: #6650a4;
+}
+
+.splice-notice,
+.sprite-hint {
+    padding: 14px 16px;
+    background: #111a2a;
+    border: 1px solid #47608f;
+    border-radius: 14px;
+    color: #c8d6f5;
+    line-height: 1.45;
+}
+
+.splice-notice strong,
+.sprite-hint strong {
+    color: #eef2ff;
 }
 
 #uploadPreviewContainer {

@@ -78,6 +78,9 @@ $recent = get_recent_outputs();
                     <span>Sprite / image file</span>
                     <input type="file" name="sprite" id="spriteInput" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" required>
                 </label>
+                <div class="sprite-hint" id="spriteHintBox">
+                    <strong>Hint:</strong> Upload a sprite sheet or single image to see splice suggestions.
+                </div>
             </div>
 
             <div id="framesUploadSection" class="is-hidden">

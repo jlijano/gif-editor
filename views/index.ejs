@@ -11,7 +11,7 @@
     <header class="hero">
         <div>
             <h1>Sprite GIF Converter / Editor</h1>
-            <p>Upload 5 separate frames, remove backgrounds automatically, preview the cleaned frames, then combine them into one animated GIF.</p>
+            <p>Upload separate frames or a sprite strip, preview the cleaned frames, then combine them into one animated GIF.</p>
         </div>
     </header>
 
@@ -54,7 +54,12 @@
                 </label>
             </div>
 
-            <button type="button" class="button" id="addFrameButton">+ Add frame</button>
+            <div class="frame-actions">
+                <button type="button" class="button" id="addFrameButton">+ Add frame</button>
+                <button type="button" class="button splice-button is-hidden" id="spliceFrameButton">Splice image</button>
+            </div>
+
+            <div class="splice-notice is-hidden" id="spliceNotice" role="status"></div>
 
             <label class="field drop-zone" id="dropZone">
                 <span>Quick upload</span>
