@@ -54,17 +54,74 @@ $recent = get_recent_outputs();
         <h2>Upload and Convert</h2>
 
         <form method="post" enctype="multipart/form-data" class="form">
-            <label class="field">
-                <span>Image file</span>
-                <input type="file" name="sprite" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" required>
-            </label>
+            <div class="grid">
+                <label class="checkbox">
+                    <input type="radio" name="upload_mode" value="single" checked>
+                    <span>Single image</span>
+                </label>
 
-            <label class="checkbox">
-                <input type="checkbox" name="slice_enabled" value="1" id="sliceEnabled">
-                <span>Enable sprite-sheet slicing / animated GIF</span>
-            </label>
+                <label class="checkbox">
+                    <input type="radio" name="upload_mode" value="sprite_sheet">
+                    <span>Sprite sheet cropper</span>
+                </label>
 
-            <div class="grid" id="sliceControls">
+                <label class="checkbox">
+                    <input type="radio" name="upload_mode" value="frames">
+                    <span>Multiple frame files</span>
+                </label>
+            </div>
+
+            <input type="hidden" name="slice_enabled" id="sliceEnabledInput" value="0">
+
+            <div id="spriteUploadSection">
+                <label class="field">
+                    <span>Sprite / image file</span>
+                    <input type="file" name="sprite" id="spriteInput" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" required>
+                </label>
+            </div>
+
+            <div id="framesUploadSection" class="is-hidden">
+                <div class="frames-grid" id="framesContainer">
+                    <label class="field upload-field">
+                        <span>Frame 1</span>
+                        <input type="file" name="frames[]" class="frame-input" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif">
+                        <div class="frame-preview-card" id="framePreview1">
+                            <div class="preview-placeholder-small">No image selected</div>
+                        </div>
+                    </label>
+
+                    <label class="field upload-field">
+                        <span>Frame 2</span>
+                        <input type="file" name="frames[]" class="frame-input" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif">
+                        <div class="frame-preview-card" id="framePreview2">
+                            <div class="preview-placeholder-small">No image selected</div>
+                        </div>
+                    </label>
+                </div>
+
+                <button type="button" class="button" id="addFrameButton">+ Add frame</button>
+
+                <label class="field drop-zone" id="dropZone">
+                    <span>Quick upload</span>
+                    <p class="drop-zone-hint">Drag & drop 2 or more images here or paste them from the clipboard.</p>
+                </label>
+
+                <section class="preview-section">
+                    <h3>Selected frames preview</h3>
+                    <div class="preview-grid" id="previewGrid">
+                        <div class="preview-placeholder">Select images to preview removed background here.</div>
+                    </div>
+                </section>
+
+                <div class="suggestion-row">
+                    <div>Suggested width: <strong id="suggestedWidth">32</strong></div>
+                    <div>Suggested height: <strong id="suggestedHeight">32</strong></div>
+                    <div>Max width: <strong id="maxWidth">32</strong></div>
+                    <div>Max height: <strong id="maxHeight">32</strong></div>
+                </div>
+            </div>
+
+            <div class="grid is-hidden" id="sliceControls">
                 <label class="field">
                     <span>Frame width</span>
                     <input type="number" name="frame_width" min="1" value="32">

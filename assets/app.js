@@ -9,7 +9,7 @@ const maxWidthText = document.getElementById('maxWidth');
 const maxHeightText = document.getElementById('maxHeight');
 const frameWidthInput = document.querySelector('input[name="frame_width"]');
 const frameHeightInput = document.querySelector('input[name="frame_height"]');
-const frameRateInput = document.querySelector('input[name="frame_rate"]');
+const frameDelayInput = document.querySelector('input[name="delay_ms"]');
 const MAX_FRAMES = 12;
 
 function getFileInputs() {
@@ -41,7 +41,7 @@ function createFrameInput() {
 
     wrapper.innerHTML = `
         <span>Frame ${index}</span>
-        <input type="file" name="frames" class="frame-input" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif">
+        <input type="file" name="frames[]" class="frame-input" accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif">
         <div class="frame-preview-card" id="framePreview${index}">
             <div class="preview-placeholder-small">No image selected</div>
         </div>
@@ -177,7 +177,7 @@ function updateSuggestedSizes(sizes) {
     if (maxHeightText) maxHeightText.textContent = `${maxHeight}`;
     if (frameWidthInput && !frameWidthInput.value) frameWidthInput.value = `${maxWidth}`;
     if (frameHeightInput && !frameHeightInput.value) frameHeightInput.value = `${maxHeight}`;
-    if (frameRateInput && !frameRateInput.value) frameRateInput.value = '24';
+    if (frameDelayInput && !frameDelayInput.value) frameDelayInput.value = '120';
 }
 
 function estimateBackgroundColor(imageData) {
@@ -255,6 +255,52 @@ if (dropZone) {
         dropZone.classList.remove('dragover');
         handleFiles(event.dataTransfer.files);
     });
+}
+
+function setUploadMode(mode) {
+    const spriteUploadSection = document.getElementById('spriteUploadSection');
+    const framesUploadSection = document.getElementById('framesUploadSection');
+    const sliceControls = document.getElementById('sliceControls');
+    const spriteInput = document.getElementById('spriteInput');
+    const sliceEnabledInput = document.getElementById('sliceEnabledInput');
+    const frameInputs = getFileInputs();
+
+    if (spriteUploadSection) {
+        spriteUploadSection.classList.toggle('is-hidden', mode === 'frames');
+    }
+
+    if (framesUploadSection) {
+        framesUploadSection.classList.toggle('is-hidden', mode !== 'frames');
+    }
+
+    if (sliceControls) {
+        sliceControls.classList.toggle('is-hidden', mode !== 'sprite_sheet');
+    }
+
+    if (spriteInput) {
+        spriteInput.required = mode !== 'frames';
+    }
+
+    frameInputs.forEach((input) => {
+        input.required = mode === 'frames';
+    });
+
+    if (sliceEnabledInput) {
+        sliceEnabledInput.value = mode === 'sprite_sheet' ? '1' : '0';
+    }
+}
+
+const uploadModeInputs = document.querySelectorAll('input[name="upload_mode"]');
+if (uploadModeInputs.length) {
+    uploadModeInputs.forEach((input) => {
+        input.addEventListener('change', () => setUploadMode(input.value));
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setUploadMode('single'));
+} else {
+    setUploadMode('single');
 }
 
 document.addEventListener('paste', (event) => {

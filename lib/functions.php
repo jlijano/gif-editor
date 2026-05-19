@@ -7,6 +7,41 @@ function h(string $value): string {
 function handle_upload_and_convert(): array {
     ensure_dirs();
 
+    $uploadMode = $_POST['upload_mode'] ?? 'single';
+    $sliceEnabled = $uploadMode === 'sprite_sheet' || (isset($_POST['slice_enabled']) && $_POST['slice_enabled'] === '1');
+    $id = date('Ymd_His') . '_' . bin2hex(random_bytes(4));
+    $outputPath = __DIR__ . '/../outputs/' . $id . '.gif';
+    $outputUrl = 'outputs/' . basename($outputPath);
+
+    if ($uploadMode === 'frames' && isset($_FILES['frames']) && is_array($_FILES['frames']['name'])) {
+        $framesDir = __DIR__ . '/../outputs/frames_' . $id;
+        mkdir($framesDir, 0775, true);
+
+        $frames = load_frames_from_upload($_FILES['frames'], $framesDir);
+
+        if (empty($frames)) {
+            throw new RuntimeException('No valid frame files were uploaded.');
+        }
+
+        $settings = read_slice_settings();
+        $animated = create_animated_gif($frames, $outputPath, $settings);
+        cleanup_dir($framesDir);
+
+        if ($animated) {
+            $message = 'Created an animated GIF from ' . count($frames) . ' frame(s).';
+        } else {
+            $first = imagecreatefrompng($frames[0]);
+            save_static_gif($first, $outputPath);
+            imagedestroy($first);
+            $message = 'ImageMagick was not available, so a static GIF was created from the first frame.';
+        }
+
+        return [
+            'output_url' => $outputUrl,
+            'message' => $message,
+        ];
+    }
+
     if (!isset($_FILES['sprite']) || $_FILES['sprite']['error'] !== UPLOAD_ERR_OK) {
         throw new RuntimeException('Please upload a valid image file.');
     }
@@ -29,10 +64,7 @@ function handle_upload_and_convert(): array {
         throw new RuntimeException('Unsupported file type. Upload PNG, JPG, JPEG, WebP, or GIF.');
     }
 
-    $id = date('Ymd_His') . '_' . bin2hex(random_bytes(4));
     $inputPath = __DIR__ . '/../uploads/' . $id . '.' . $allowed[$mime];
-    $outputPath = __DIR__ . '/../outputs/' . $id . '.gif';
-    $outputUrl = 'outputs/' . basename($outputPath);
 
     if (!move_uploaded_file($file['tmp_name'], $inputPath)) {
         throw new RuntimeException('Could not save uploaded file.');
@@ -45,8 +77,6 @@ function handle_upload_and_convert(): array {
 
     imagepalettetotruecolor($image);
     imagesavealpha($image, true);
-
-    $sliceEnabled = isset($_POST['slice_enabled']) && $_POST['slice_enabled'] === '1';
 
     if (!$sliceEnabled) {
         save_static_gif($image, $outputPath);
@@ -76,7 +106,6 @@ function handle_upload_and_convert(): array {
     if ($animated) {
         $message = 'Created an animated GIF from ' . count($frames) . ' frame(s).';
     } else {
-        // Fallback: static first frame
         $first = imagecreatefrompng($frames[0]);
         save_static_gif($first, $outputPath);
         imagedestroy($first);
@@ -87,6 +116,50 @@ function handle_upload_and_convert(): array {
         'output_url' => $outputUrl,
         'message' => $message,
     ];
+}
+
+function load_frames_from_upload(array $files, string $framesDir): array {
+    $allowed = [
+        'image/png' => 'png',
+        'image/jpeg' => 'jpg',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+    ];
+
+    $frames = [];
+    $count = count($files['name']);
+
+    for ($i = 0; $i < $count; $i++) {
+        if (!isset($files['tmp_name'][$i]) || $files['error'][$i] !== UPLOAD_ERR_OK) {
+            continue;
+        }
+
+        $tmpName = $files['tmp_name'][$i];
+        if (!is_uploaded_file($tmpName) || filesize($tmpName) <= 0) {
+            continue;
+        }
+
+        $mime = mime_content_type($tmpName);
+        if (!isset($allowed[$mime])) {
+            continue;
+        }
+
+        $image = load_image($tmpName, $mime);
+        if (!$image) {
+            continue;
+        }
+
+        imagepalettetotruecolor($image);
+        imagesavealpha($image, true);
+
+        $framePath = $framesDir . '/frame_' . str_pad((string)$i, 4, '0', STR_PAD_LEFT) . '.png';
+        imagepng($image, $framePath);
+        imagedestroy($image);
+
+        $frames[] = $framePath;
+    }
+
+    return $frames;
 }
 
 function ensure_dirs(): void {

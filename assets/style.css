@@ -238,8 +238,14 @@ input[type="file"] {
     border-radius: 14px;
 }
 
-.grid.is-hidden {
+.grid.is-hidden,
+.is-hidden {
     display: none;
+}
+
+.mode-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: center;
 }
 
 .button {
